@@ -15,5 +15,6 @@ class UserRegistration extends Model
         'diet',
         'time',
         'motivation',
+        'typeWeightLoss'
     ];
 }

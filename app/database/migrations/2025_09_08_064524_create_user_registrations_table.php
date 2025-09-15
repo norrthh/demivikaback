@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('diet')->nullable();       // тип диеты
             $table->string('time')->nullable();       // доступное время (например: "3–5 часов")
             $table->string('motivation')->nullable(); // мотивация
+            $table->string('typeWeightLoss')->nullable(); // мотивация
 
             $table->timestamps();
         });

@@ -10,4 +10,6 @@ Route::prefix('/v1')->group(function () {
 
     Route::get('recipes', [UserController::class, 'recipes']);
     Route::get('workouts', [UserController::class, 'workouts']);
+
+    Route::post('/groccery', [UserController::class, 'groccery']);
 });

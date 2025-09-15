@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\UserRecipes;
+use App\Models\UserRegistration;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class PersonalRecipeService
 {
@@ -25,16 +27,42 @@ class PersonalRecipeService
 
         if ($userRecipes->isNotEmpty()) {
             // Есть подборка → просто подтягиваем рецепты из Supabase
-            return $this->supabase->select('recipes', [
+            return $this->supabase->select('recipes_week', [
                 'id' => 'in.(' . $userRecipes->implode(',') . ')'
             ]);
         }
 
         // 2. Если на эту неделю нет → удаляем все старые подборки пользователя
         UserRecipes::query()->where('telegram_id', $telegramId)->delete();
+        $user = UserRegistration::query()
+            ->where('telegram_id', $telegramId)
+            ->first();
 
-        // 3. Берём все рецепты из Supabase
-        $allRecipes = $this->supabase->select('recipes', ['select' => '*' ]);
+        if (!$user) {
+            return [];
+        }
+
+        $type = mb_strtolower(trim((string)($user->typeWeightLoss ?? '')));
+
+        $dietId = $type === 'похудение' ? 1 : 2;
+        $week = (new PersonalGroceryServices($this->supabase))->getWeek;
+        $pp_type = $user->diet === 'Без ограничений' ? 1 : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
+
+//        $week = now()->format('W');
+//        Log::info('week: ' . $week);
+//        $week = $week == 38 ? 1 : ($week == 39 ? 2 : ($week == 40 ? 3 : ($week == 41 ? 4 : $week)));
+//
+//        return [
+//            $dietId, $week, $pp_type,
+//        ];
+
+        $allRecipes = $this->supabase->select('recipes_week', [
+            'select' => '*',
+            'diet_goals_id'  => "eq.$dietId",
+            'week' => "eq." . $week,
+            'pp_type' => "eq." . $pp_type,
+            'order'         => 'created_at.asc',
+        ]);
         if (!$allRecipes) return [];
 
         // 4. Выбираем случайные n

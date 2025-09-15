@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\v1;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserRegistration;
+use App\Services\PersonalGroceryServices;
 use App\Services\PersonalRecipeService;
 use App\Services\PersonalWorkoutService;
 use App\Services\SupabaseService;
@@ -37,9 +38,10 @@ class UserController extends Controller
         ]);
     }
 
-    public function recipes(Request $request, PersonalRecipeService $personalRecipeService): JsonResponse
+    public function recipes(Request $request, PersonalRecipeService $personalRecipeService, PersonalGroceryServices $groceryServices)
     {
         $telegramId = $request->get('telegram_id');
+
         $limit = 7;
         $page = 1;
 
@@ -51,6 +53,7 @@ class UserController extends Controller
 
         return response()->json([
             'recipes' => $paginated,
+            'grocery' => $groceryServices->get($telegramId),
             'meta' => [
                 'total' => count($recipes),
                 'page'  => $page,
@@ -59,7 +62,7 @@ class UserController extends Controller
         ]);
     }
 
-    public function workouts(Request $request, PersonalWorkoutService $personalWorkoutService)
+    public function workouts(Request $request, PersonalWorkoutService $personalWorkoutService): JsonResponse
     {
         $request->validate([
             'telegram_id' => ['required', 'integer'],
