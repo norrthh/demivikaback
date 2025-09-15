@@ -119,109 +119,32 @@ class PersonalWorkoutService
         ]) ?? [];
     }
 
-    /**
-     * Кандидатные workout_id через таблицу-связку workout_to_category (M:N).
-     * Логика:
-     *  - Находим id категории по названию self::EXCLUDED_CATEGORY_NAME
-     *  - (опц.) собираем все её дочерние id (если EXCLUDE_SUBTREE = true)
-     *  - Берём ВСЕ категории, кроме исключённых => allowedCategoryIds
-     *  - Кандидаты = workout_id, у которых есть связь с allowedCategoryIds
-     *  - Если исключённые существуют: убираем все workout_id, у которых есть связь с excludedCategoryIds (строгий exclude)
-     */
     private function fetchCandidateWorkoutIdsViaPivot(): Collection
     {
-        // 1) Тянем словарь категорий
-        $cats = $this->supabase->select('workout_categories', [
-            'select' => 'id,name,parent_id',
-            'order'  => 'created_at.asc',
+        $getFilets = [
+            '17738d8f-9162-48b5-a102-586dbe1808f0',
+            'f1e8fcd8-066c-4c19-a1f0-4f1bbfa38dcd',
+            '18c78f94-ccd1-42b0-9ea3-f01623fd5a1d'
+        ];
+
+        $filter = $this->buildInFilter($getFilets);
+        if (!$filter) {
+            return collect();
+        }
+
+        $links = $this->supabase->select('workout_to_category', [
+            'select'      => 'workout_id,category_id',
+            'category_id' => $filter,
         ]) ?? [];
 
-        $allCategories = collect($cats)->map(function ($row) {
-            return [
-                'id'        => is_array($row) ? ($row['id'] ?? null) : (is_object($row) ? ($row->id ?? null) : null),
-                'name'      => is_array($row) ? ($row['name'] ?? null) : (is_object($row) ? ($row->name ?? null) : null),
-                'parent_id' => is_array($row) ? ($row['parent_id'] ?? null) : (is_object($row) ? ($row->parent_id ?? null) : null),
-            ];
-        })->filter(fn($c) => !empty($c['id']) && !empty($c['name']))->values();
-
-        // 2) Определяем исключаемую категорию и, при необходимости, весь её поддерев
-        $excludedRoot = $allCategories->firstWhere('name', self::EXCLUDED_CATEGORY_NAME);
-        $excludedIds = collect();
-
-        if ($excludedRoot) {
-            $excludedIds = collect([$excludedRoot['id']]);
-            if (self::EXCLUDE_SUBTREE) {
-                // собираем всех потомков
-                $childrenByParent = $allCategories->groupBy('parent_id');
-                $queue = [$excludedRoot['id']];
-                while (!empty($queue)) {
-                    $pid = array_shift($queue);
-                    foreach (($childrenByParent[$pid] ?? collect()) as $child) {
-                        $cid = $child['id'];
-                        if (!$excludedIds->contains($cid)) {
-                            $excludedIds->push($cid);
-                            $queue[] = $cid;
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3) Разрешённые категории = все минус исключённые
-        $allowedCategoryIds = $allCategories
-            ->pluck('id')
-            ->reject(fn ($id) => $excludedIds->contains($id))
+        return collect($links)
+            ->map(fn($row) => is_array($row) ? $row['workout_id'] : $row->workout_id)
+            ->filter()
+            ->map('strval')
+            ->unique()
             ->values();
-
-        // Если категорий нет вообще — ничего не возвращаем
-        if ($allowedCategoryIds->isEmpty() && $excludedIds->isEmpty()) {
-            return collect(); // ничего не известно о категориях
-        }
-
-        // 4) Кандидаты по allowedCategoryIds (workout_to_category)
-        $candidateIds = collect();
-        if ($allowedCategoryIds->isNotEmpty()) {
-            $allowedFilter = $this->buildInFilter($allowedCategoryIds);
-            if ($allowedFilter) {
-                $links = $this->supabase->select('workout_to_category', [
-                    'select'       => 'workout_id,category_id',
-                    'category_id'  => $allowedFilter,   // было "in(...)" — стало "in.(...)"
-                ]) ?? [];
-
-                $candidateIds = collect($links)->map(function ($row) {
-                    if (is_array($row))  return $row['workout_id'] ?? null;
-                    if (is_object($row)) return $row->workout_id ?? null;
-                    return null;
-                })->filter()->map('strval')->unique()->values();
-            }
-        }
-
-        // 5) Жёстко исключаем тренировки, имеющие связь с excludedIds (если такие есть)
-        // ✅ и участок с $blockedLinks:
-        if ($excludedIds->isNotEmpty() && $candidateIds->isNotEmpty()) {
-            $excludedFilter = $this->buildInFilter($excludedIds);
-            if ($excludedFilter) {
-                $blockedLinks = $this->supabase->select('workout_to_category', [
-                    'select'       => 'workout_id,category_id',
-                    'category_id'  => $excludedFilter, // было "in(...)" — стало "in.(...)"
-                ]) ?? [];
-
-                $blockedIds = collect($blockedLinks)->map(function ($row) {
-                    if (is_array($row))  return $row['workout_id'] ?? null;
-                    if (is_object($row)) return $row->workout_id ?? null;
-                    return null;
-                })->filter()->map('strval')->unique()->values();
-
-                if ($blockedIds->isNotEmpty()) {
-                    $blockedSet = $blockedIds->flip();
-                    $candidateIds = $candidateIds->reject(fn ($id) => $blockedSet->has((string)$id))->values();
-                }
-            }
-        }
-
-
-        return $candidateIds;
     }
+
 
     // ✅ добавь в класс helper
     private function buildInFilter($values): ?string
