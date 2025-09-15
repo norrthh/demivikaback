@@ -27,7 +27,7 @@ class PersonalGroceryServices
         }
 
         $type = mb_strtolower(trim((string)($user->typeWeightLoss ?? '')));
-        $dietId = $type === 'похудение' ? 1 : 2;
+        $dietId = $type === 'Снижение веса' ? 1 : 2;
 
         return $this->supabase->select('grocery_items', [
             'select' => '*',
