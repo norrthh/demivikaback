@@ -48,27 +48,34 @@ class PersonalRecipeService
         $week = (new PersonalGroceryServices($this->supabase))->getWeek;
         $pp_type = $user->diet === 'Без ограничений' ? 1 : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
 
-//        $week = now()->format('W');
-//        Log::info('week: ' . $week);
-//        $week = $week == 38 ? 1 : ($week == 39 ? 2 : ($week == 40 ? 3 : ($week == 41 ? 4 : $week)));
-//
-//        return [
-//            $dietId, $week, $pp_type,
-//        ];
-
-        $allRecipes = $this->supabase->select('recipes_week', [
+        // 3. Берём все рецепты для диеты/недели
+        $allRecipes = collect($this->supabase->select('recipes_week', [
             'select' => '*',
             'diet_goals_id'  => "eq.$dietId",
             'week' => "eq." . $week,
             'pp_type' => "eq." . $pp_type,
-            'order'         => 'created_at.asc',
-        ]);
-        if (!$allRecipes) return [];
+        ]));
 
-        // 4. Выбираем случайные n
-        $selected = collect($allRecipes)->random(min($count, count($allRecipes)));
+// 4. Группируем по meal_types
+        $grouped = $allRecipes->groupBy(function ($item) {
+            return $item['meal_types'][0] ?? null; // берём первый тип
+        });
 
-        // 5. Сохраняем новые записи
+        $order = ['breakfast', 'snack', 'lunch', 'dinner'];
+        $selected = collect();
+
+        foreach ($order as $meal) {
+            if (!empty($grouped[$meal])) {
+                // есть такие блюда → берём случайное
+                $selected->push(collect($grouped[$meal])->random());
+            } else {
+                // нет блюд этого типа → берём случайное из всего списка
+                if ($allRecipes->isNotEmpty()) {
+                    $selected->push($allRecipes->random());
+                }
+            }
+        }
+
         foreach ($selected as $recipe) {
             UserRecipes::query()->create([
                 'telegram_id' => $telegramId,
