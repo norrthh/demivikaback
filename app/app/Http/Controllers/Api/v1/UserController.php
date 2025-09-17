@@ -52,7 +52,7 @@ class UserController extends Controller
         $paginated = array_slice($recipes, $offset, $limit);
 
         return response()->json([
-            'recipes' => $paginated,
+            'recipes' => $recipes,
             'grocery' => $groceryServices->get($telegramId),
             'meta' => [
                 'total' => count($recipes),
@@ -86,5 +86,10 @@ class UserController extends Controller
                 'limit' => $limit,
             ]
         ]);
+    }
+
+    public function adminRecipes()
+    {
+        return (new SupabaseService())->select('recipes_week');
     }
 }

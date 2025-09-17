@@ -2,10 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\UserRecipes;
 use App\Models\UserRegistration;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Collection;
 
 class PersonalRecipeService
 {
@@ -16,24 +14,8 @@ class PersonalRecipeService
         $this->supabase = $supabase;
     }
 
-    public function getWeeklyRecipes(int $telegramId, int $count = 5)
+    public function getWeeklyRecipes($telegramId): array
     {
-        $weekStart = Carbon::now()->startOfWeek()->toDateString();
-
-        // 1. Проверяем, есть ли подборка на эту неделю
-        $userRecipes = UserRecipes::query()->where('telegram_id', $telegramId)
-            ->where('week_start', $weekStart)
-            ->pluck('recipe_id');
-
-        if ($userRecipes->isNotEmpty()) {
-            // Есть подборка → просто подтягиваем рецепты из Supabase
-            return $this->supabase->select('recipes_week', [
-                'id' => 'in.(' . $userRecipes->implode(',') . ')'
-            ]);
-        }
-
-        // 2. Если на эту неделю нет → удаляем все старые подборки пользователя
-        UserRecipes::query()->where('telegram_id', $telegramId)->delete();
         $user = UserRegistration::query()
             ->where('telegram_id', $telegramId)
             ->first();
@@ -41,50 +23,58 @@ class PersonalRecipeService
         if (!$user) {
             return [];
         }
+        $week   = (new PersonalGroceryServices($this->supabase))->getWeek;
 
-        $type = mb_strtolower(trim((string)($user->typeWeightLoss ?? '')));
+        $dietId = mb_strtolower(trim((string)($user->typeWeightLoss ?? ''))) === 'снижение веса' ? 1 : 2;
+        $ppType = $user->diet === 'Без ограничений'
+            ? 1
+            : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
 
-        $dietId = $type === 'Снижение веса' ? 1 : 2;
-        $week = (new PersonalGroceryServices($this->supabase))->getWeek;
-        $pp_type = $user->diet === 'Без ограничений' ? 1 : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
-
-        // 3. Берём все рецепты для диеты/недели
-        $allRecipes = collect($this->supabase->select('recipes_week', [
-            'select' => '*',
-            'diet_goals_id'  => "eq.$dietId",
-            'week' => "eq." . $week,
-            'pp_type' => "eq." . $pp_type,
+        $recipes = collect($this->supabase->select('recipes_week', [
+            'select'        => '*',
+            'diet_goals_id' => "eq.$dietId",
+            'week'          => "eq.$week",
+            'pp_type'       => "eq.$ppType",
         ]));
 
-// 4. Группируем по meal_types
-        $grouped = $allRecipes->groupBy(function ($item) {
-            return $item['meal_types'][0] ?? null; // берём первый тип
-        });
 
-        $order = ['breakfast', 'snack', 'lunch', 'dinner'];
-        $selected = collect();
+        // маппинг дней недели на русском
+        $daysMap = [
+            1 => 'Понедельник',
+            2 => 'Вторник',
+            3 => 'Среда',
+            4 => 'Четверг',
+            5 => 'Пятница',
+            6 => 'Суббота',
+            7 => 'Воскресенье',
+        ];
 
-        foreach ($order as $meal) {
-            if (!empty($grouped[$meal])) {
-                // есть такие блюда → берём случайное
-                $selected->push(collect($grouped[$meal])->random());
-            } else {
-                // нет блюд этого типа → берём случайное из всего списка
-                if ($allRecipes->isNotEmpty()) {
-                    $selected->push($allRecipes->random());
-                }
+        // маппинг meal_types → русский
+        $mealMap = [
+            'breakfast' => 'Завтрак',
+            'snack'     => 'Перекус',
+            'lunch'     => 'Обед',
+            'smoothie'  => 'Смузи',
+            'dinner'    => 'Ужин',
+        ];
+
+        $result = [];
+
+        foreach ($daysMap as $dayNum => $dayName) {
+            $dayRecipes = $recipes->where('day', $dayNum);
+
+            // группировка по meal_types
+            $grouped = $dayRecipes->groupBy(function ($item) {
+                return $item['meal_types'][0] ?? 'other';
+            });
+
+            $result[$dayName] = [];
+
+            foreach ($mealMap as $mealKey => $mealName) {
+                $result[$dayName][$mealName] = $grouped->get($mealKey, collect())->values()->toArray();
             }
         }
 
-        foreach ($selected as $recipe) {
-            UserRecipes::query()->create([
-                'telegram_id' => $telegramId,
-                'recipe_id'   => $recipe['id'],
-                'week_start'  => $weekStart,
-            ]);
-        }
-
-        return $selected->toArray();
+        return $result;
     }
 }
-
