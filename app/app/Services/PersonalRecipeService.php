@@ -51,11 +51,11 @@ class PersonalRecipeService
 
         // маппинг meal_types → русский
         $mealMap = [
-            'breakfast' => 'Завтрак',
-            'snack'     => 'Перекус',
-            'lunch'     => 'Обед',
+            'breakfast' => 'Завтрак (6.30-10.30)',
+            'snack'     => 'Перекус (10.30-12.30):',
+            'lunch'     => 'Обед (12.30-15.30)',
             'smoothie'  => 'Смузи',
-            'dinner'    => 'Ужин',
+            'dinner'    => 'Ужин (17.30-19.00)',
         ];
 
         $result = [];
