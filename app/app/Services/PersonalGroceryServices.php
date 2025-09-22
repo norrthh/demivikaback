@@ -32,7 +32,7 @@ class PersonalGroceryServices
         return $this->supabase->select('grocery_items', [
             'select' => '*',
             'diet_goals_id' => "eq.$dietId",
-            'week' => "eq." . $this->getWeek,
+//            'week' => "eq." . $this->getWeek,
             'order' => 'created_at.asc',
         ]);
 
