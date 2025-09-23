@@ -28,12 +28,16 @@ class PersonalGroceryServices
 
         $type = mb_strtolower(trim((string)($user->typeWeightLoss ?? '')));
         $dietId = $type === 'Снижение веса' ? 1 : 2;
+        $ppType = $user->diet === 'Без ограничений'
+            ? 1
+            : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
 
         return $this->supabase->select('grocery_items', [
             'select' => '*',
             'diet_goals_id' => "eq.$dietId",
 //            'week' => "eq." . $this->getWeek,
             'order' => 'created_at.asc',
+            'pp_type'       => "eq.$ppType",
         ]);
 
     }
