@@ -41,11 +41,12 @@ class UserController extends Controller
     public function recipes(Request $request, PersonalRecipeService $personalRecipeService, PersonalGroceryServices $groceryServices)
     {
         $telegramId = $request->get('telegram_id');
+        $week = $request->get('week');
 
         $limit = 7;
         $page = 1;
 
-        $recipes = $personalRecipeService->getWeeklyRecipes($telegramId, $limit);
+        $recipes = $personalRecipeService->getWeeklyRecipes($telegramId, $week);
 
         // Пагинация "вручную" (если нужно)
         $offset = ($page - 1) * $limit;
@@ -53,7 +54,7 @@ class UserController extends Controller
 
         return response()->json([
             'recipes' => $recipes,
-            'grocery' => $groceryServices->get($telegramId),
+            'grocery' => $groceryServices->get($telegramId, $week),
             'meta' => [
                 'total' => count($recipes),
                 'page'  => $page,

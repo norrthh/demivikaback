@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\UserRegistration;
+use Illuminate\Support\Facades\Log;
 
 class PersonalGroceryServices
 {
@@ -16,7 +17,7 @@ class PersonalGroceryServices
         $this->supabase = $supabase;
     }
 
-    public function get($telegramId)
+    public function get($telegramId, int $week)
     {
         $user = UserRegistration::query()
             ->where('telegram_id', $telegramId)
@@ -32,11 +33,13 @@ class PersonalGroceryServices
             ? 1
             : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
 
+        Log::info($this->getWeek + $week);
+
         return $this->supabase->select('grocery_items', [
             'select' => '*',
             'diet_goals_id' => "eq.$dietId",
-            'week' => "eq." . $this->getWeek,
-            'order' => 'created_at.asc',
+            'week' => "eq." . ($this->getWeek + $week),
+//            'order' => 'created_at.asc',
             'pp_type'       => "eq.$ppType",
         ]);
     }

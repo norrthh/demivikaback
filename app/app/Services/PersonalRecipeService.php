@@ -14,7 +14,7 @@ class PersonalRecipeService
         $this->supabase = $supabase;
     }
 
-    public function getWeeklyRecipes($telegramId): array
+    public function getWeeklyRecipes($telegramId, int $week): array
     {
         $user = UserRegistration::query()
             ->where('telegram_id', $telegramId)
@@ -23,7 +23,7 @@ class PersonalRecipeService
         if (!$user) {
             return [];
         }
-        $week   = (new PersonalGroceryServices($this->supabase))->getWeek;
+        $week = (new PersonalGroceryServices($this->supabase))->getWeek + $week;
 
         $dietId = mb_strtolower(trim((string)($user->typeWeightLoss ?? ''))) === 'снижение веса' ? 1 : 2;
         $ppType = $user->diet === 'Без ограничений'
@@ -31,10 +31,10 @@ class PersonalRecipeService
             : ($user->diet === 'Вегетарианство/веганство' ? 2 : 3);
 
         $recipes = collect($this->supabase->select('recipes_week', [
-            'select'        => '*',
+            'select' => '*',
             'diet_goals_id' => "eq.$dietId",
-            'week'          => "eq.$week",
-            'pp_type'       => "eq.$ppType",
+            'week' => "eq.$week",
+            'pp_type' => "eq.$ppType",
         ]));
 
 
@@ -52,10 +52,10 @@ class PersonalRecipeService
         // маппинг meal_types → русский
         $mealMap = [
             'breakfast' => 'Завтрак (6.30-10.30)',
-            'snack'     => 'Перекус (10.30-12.30):',
-            'lunch'     => 'Обед (12.30-15.30)',
-            'smoothie'  => 'Смузи',
-            'dinner'    => 'Ужин (17.30-19.00)',
+            'snack' => 'Перекус (10.30-12.30):',
+            'lunch' => 'Обед (12.30-15.30)',
+            'smoothie' => 'Смузи',
+            'dinner' => 'Ужин (17.30-19.00)',
         ];
 
         $result = [];
