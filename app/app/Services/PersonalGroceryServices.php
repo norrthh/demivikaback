@@ -12,7 +12,7 @@ class PersonalGroceryServices
     public function __construct(SupabaseService $supabase)
     {
         $week = now()->format('W');
-        $this->getWeek = $week == 38 ? 1 : ($week == 39 ? 2 : ($week == 40 ? 3 : ($week == 41 ? 4 : $week)));
+        $this->getWeek = $week == 39 ? 1 : ($week == 40 ? 2 : ($week == 41 ? 3 : ($week == 42 ? 4 : $week)));
         $this->supabase = $supabase;
     }
 
@@ -35,10 +35,9 @@ class PersonalGroceryServices
         return $this->supabase->select('grocery_items', [
             'select' => '*',
             'diet_goals_id' => "eq.$dietId",
-//            'week' => "eq." . $this->getWeek,
+            'week' => "eq." . $this->getWeek,
             'order' => 'created_at.asc',
             'pp_type'       => "eq.$ppType",
         ]);
-
     }
 }

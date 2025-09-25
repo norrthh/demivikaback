@@ -33,7 +33,7 @@ class PersonalRecipeService
         $recipes = collect($this->supabase->select('recipes_week', [
             'select'        => '*',
             'diet_goals_id' => "eq.$dietId",
-//            'week'          => "eq.$week",
+            'week'          => "eq.$week",
             'pp_type'       => "eq.$ppType",
         ]));
 
