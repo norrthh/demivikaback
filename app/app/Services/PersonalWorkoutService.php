@@ -22,7 +22,9 @@ class PersonalWorkoutService
 
     public function __construct(
         protected SupabaseService $supabase
-    ) {}
+    )
+    {
+    }
 
     /**
      * Возвращает (и при необходимости генерирует) подборку на неделю.
@@ -65,12 +67,12 @@ class PersonalWorkoutService
 
         // 5) Атомарная запись (upsert) — защищает от дублей
         $now = Carbon::now();
-        $rows = collect($selectedIds)->map(fn (string $id) => [
+        $rows = collect($selectedIds)->map(fn(string $id) => [
             'telegram_id' => $telegramId,
-            'workout_id'  => $id,
-            'week_start'  => $weekStart,
-            'created_at'  => $now,
-            'updated_at'  => $now,
+            'workout_id' => $id,
+            'week_start' => $weekStart,
+            'created_at' => $now,
+            'updated_at' => $now,
         ])->all();
 
         UserWorkouts::upsert(
@@ -92,13 +94,13 @@ class PersonalWorkoutService
 
         $list = $this->fetchWorkoutsByIds($ids);
         $byId = collect($list)->keyBy(function ($row) {
-            if (is_array($row))  return (string)($row['id'] ?? '');
+            if (is_array($row)) return (string)($row['id'] ?? '');
             if (is_object($row)) return (string)($row->id ?? '');
             return '';
         });
 
         return collect($ids)
-            ->map(fn ($id) => $byId->get((string)$id))
+            ->map(fn($id) => $byId->get((string)$id))
             ->filter()
             ->values()
             ->all();
@@ -116,7 +118,7 @@ class PersonalWorkoutService
 
         return $this->supabase->select('workouts', [
             'select' => 'id,name,cover_image_url,kinescope_id,duration_minutes,description,inventory_description,created_at',
-            'id'     => "in.($in)",
+            'id' => "in.($in)",
         ]) ?? [];
     }
 
@@ -134,14 +136,14 @@ class PersonalWorkoutService
         }
 
         $links = $this->supabase->select('workout_to_category', [
-            'select'      => 'workout_id,category_id',
+            'select' => 'workout_id,category_id',
             'category_id' => $filter,
-            'order'       => 'RANDOM()'
         ]) ?? [];
 
+        shuffle($links);
+
         return collect($links)
-            ->reject(fn($row) => is_string($row))
-            ->map(fn($row) => is_array($row) ? $row['workout_id'] : $row->workout_id ?? null)
+            ->map(fn($row) => is_array($row) ? $row['workout_id'] : $row->workout_id)
             ->filter()
             ->map('strval')
             ->unique()
