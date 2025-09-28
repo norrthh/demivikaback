@@ -140,20 +140,12 @@ class PersonalWorkoutService
         ]) ?? [];
 
         return collect($links)
-            ->map(function ($row) {
-                if (is_array($row)) {
-                    return $row['workout_id'] ?? null;
-                }
-                if (is_object($row)) {
-                    return $row->workout_id ?? null;
-                }
-                return null; // строка или что-то ещё
-            })
+            ->reject(fn($row) => is_string($row))
+            ->map(fn($row) => is_array($row) ? $row['workout_id'] : $row->workout_id ?? null)
             ->filter()
             ->map('strval')
             ->unique()
             ->values();
-
     }
 
 
