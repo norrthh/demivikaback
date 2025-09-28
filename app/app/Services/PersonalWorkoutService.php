@@ -36,7 +36,7 @@ class PersonalWorkoutService
         // 1) Если подборка на эту неделю уже есть — возвращаем
         $savedIds = UserWorkouts::query()
             ->where('telegram_id', $telegramId)
-            ->where('week_start', (new PersonalGroceryServices($this->supabase))->getWeek)
+            ->where('week_start', $weekStart)
             ->pluck('workout_id')
             ->all();
 
@@ -67,7 +67,7 @@ class PersonalWorkoutService
         $rows = collect($selectedIds)->map(fn (string $id) => [
             'telegram_id' => $telegramId,
             'workout_id'  => $id,
-            'week_start'  => (new PersonalGroceryServices($this->supabase))->getWeek,
+            'week_start'  => $weekStart,
             'created_at'  => $now,
             'updated_at'  => $now,
         ])->all();
