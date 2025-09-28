@@ -4,13 +4,14 @@ namespace App\Services;
 
 use App\Models\UserWorkouts;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class PersonalWorkoutService
 {
     private const TIMEZONE = 'Europe/Moscow';
-    private const WEEK_START_DAY = Carbon::MONDAY;
+    private const WEEK_START_DAY = CarbonInterface::MONDAY;
 
     // Название категории, тренировки из которой нужно исключать целиком
     private const EXCLUDED_CATEGORY_NAME = 'Тренировки для спортзала';
@@ -135,6 +136,7 @@ class PersonalWorkoutService
         $links = $this->supabase->select('workout_to_category', [
             'select'      => 'workout_id,category_id',
             'category_id' => $filter,
+            'order'       => 'RANDOM()'
         ]) ?? [];
 
         return collect($links)
