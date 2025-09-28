@@ -9,16 +9,6 @@ use Illuminate\Support\Facades\Log;
 
 class PersonalWorkoutService
 {
-    private const TIMEZONE = 'Europe/Moscow';
-    private const WEEK_START_DAY = Carbon::MONDAY;
-
-    // Название категории, тренировки из которой нужно исключать целиком
-    private const EXCLUDED_CATEGORY_NAME = 'Тренировки для спортзала';
-
-    // true — исключать также ВСЕ дочерние категории исключённой
-    // false — исключать только саму категорию по названию
-    private const EXCLUDE_SUBTREE = false;
-
     public function __construct(
         protected SupabaseService $supabase
     ) {}
@@ -29,14 +19,9 @@ class PersonalWorkoutService
      */
     public function getWeeklyWorkouts(int $telegramId, int $count = 5): array
     {
-        $weekStart = Carbon::now(self::TIMEZONE)
-            ->startOfWeek(self::WEEK_START_DAY)
-            ->toDateString();
-
-        // 1) Если подборка на эту неделю уже есть — возвращаем
         $savedIds = UserWorkouts::query()
             ->where('telegram_id', $telegramId)
-            ->where('week_start', $weekStart)
+            ->where('week_start', (new PersonalGroceryServices($this->supabase))->getWeek)
             ->pluck('workout_id')
             ->all();
 
@@ -67,12 +52,12 @@ class PersonalWorkoutService
         $rows = collect($selectedIds)->map(fn (string $id) => [
             'telegram_id' => $telegramId,
             'workout_id'  => $id,
-            'week_start'  => $weekStart,
+            'week_start'  => (new PersonalGroceryServices($this->supabase))->getWeek,
             'created_at'  => $now,
             'updated_at'  => $now,
         ])->all();
 
-        UserWorkouts::upsert(
+        UserWorkouts::query()->upsert(
             $rows,
             ['telegram_id', 'week_start', 'workout_id'],
             ['updated_at']
@@ -135,6 +120,7 @@ class PersonalWorkoutService
         $links = $this->supabase->select('workout_to_category', [
             'select'      => 'workout_id,category_id',
             'category_id' => $filter,
+            'order'       => 'RANDOM()'
         ]) ?? [];
 
         return collect($links)
