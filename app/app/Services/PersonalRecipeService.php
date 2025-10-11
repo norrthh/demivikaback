@@ -24,6 +24,7 @@ class PersonalRecipeService
             return [];
         }
         $week = (new PersonalGroceryServices($this->supabase))->getWeek + $week;
+        $week = $week == 4 ? 1 : $week;
 
         $dietId = mb_strtolower(trim((string)($user->typeWeightLoss ?? ''))) === 'снижение веса' ? 1 : 2;
         $ppType = $user->diet === 'Без ограничений'
