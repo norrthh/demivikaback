@@ -8,7 +8,13 @@ class UserRecipes extends Model
 {
     protected $fillable = [
         'telegram_id',
-        'recipe_id',
-        'week_start',
+        'week',
+        'date',
+        'recipe_data',
+    ];
+
+    protected $casts = [
+        'recipe_data' => 'array',
+        'date' => 'date',
     ];
 }
