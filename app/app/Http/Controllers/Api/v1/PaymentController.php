@@ -65,8 +65,30 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             Log::error('Payment creation error', [
                 'telegram_id' => $telegramId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
+
+            // Если это ошибка дублирования, возвращаем существующий платеж
+            if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                try {
+                    $existingPayment = Payment::where('order_id', $paymentData['order_id'])->first();
+                    if ($existingPayment) {
+                        return response()->json([
+                            'success' => true,
+                            'payment_url' => $existingPayment->payment_url,
+                            'order_id' => $existingPayment->order_id,
+                            'amount' => ProdamusService::SUBSCRIPTION_AMOUNT,
+                            'message' => 'Платеж уже существует'
+                        ]);
+                    }
+                } catch (\Exception $retryException) {
+                    Log::error('Failed to retrieve existing payment', [
+                        'telegram_id' => $telegramId,
+                        'error' => $retryException->getMessage()
+                    ]);
+                }
+            }
 
             return response()->json([
                 'success' => false,
@@ -196,20 +218,45 @@ class PaymentController extends Controller
             // Находим платеж по order_num (это наш order_id) или order_id (внутренний ID Prodamus)
             $payment = null;
             if ($orderNum) {
-                // order_num в webhook'е - это наш order_id
+                // order_num в webhook'е - это наш order_id, ищем по полю order_id в БД
                 $payment = Payment::where('order_id', $orderNum)->first();
                 Log::info('Searching payment by order_num (our order_id)', ['order_num' => $orderNum, 'found' => $payment ? 'yes' : 'no']);
             }
 
             if (!$payment && $orderId) {
-                // order_id в webhook'е - это внутренний ID Prodamus, ищем по order_num в БД
+                // order_id в webhook'е - это внутренний ID Prodamus, ищем по полю order_num в БД
                 $payment = Payment::where('order_num', $orderId)->first();
                 Log::info('Searching payment by order_id (Prodamus internal ID)', ['order_id' => $orderId, 'found' => $payment ? 'yes' : 'no']);
             }
 
             if (!$payment) {
-                Log::error('Payment not found', ['order_id' => $orderId, 'order_num' => $orderNum]);
-                return response()->json(['error' => 'Payment not found'], 404);
+                // Если платеж не найден, но у нас есть order_num, попробуем извлечь telegram_id
+                if ($orderNum && preg_match('/^pay_(\d+)_[a-f0-9]+_\d+$/', $orderNum, $matches)) {
+                    $telegramId = (int) $matches[1];
+                    
+                    Log::info('Payment not found, attempting to create from webhook data', [
+                        'order_id' => $orderId,
+                        'order_num' => $orderNum,
+                        'telegram_id' => $telegramId
+                    ]);
+                    
+                    // Создаем платеж на основе данных webhook
+                    $payment = Payment::createPayment([
+                        'order_id' => $orderNum,
+                        'order_num' => $orderId,
+                        'telegram_id' => $telegramId,
+                        'type' => 'one_time',
+                        'product_name' => ProdamusService::SUBSCRIPTION_DESCRIPTION,
+                        'amount' => ProdamusService::SUBSCRIPTION_AMOUNT,
+                        'status' => 'pending',
+                        'prodamus_data' => $data,
+                    ]);
+                    
+                    Log::info('Payment created from webhook data', ['payment_id' => $payment->id]);
+                } else {
+                    Log::error('Payment not found and cannot extract telegram_id', ['order_id' => $orderId, 'order_num' => $orderNum]);
+                    return response()->json(['error' => 'Payment not found'], 404);
+                }
             }
 
             // Получаем telegram_id из найденного платежа
@@ -357,12 +404,12 @@ class PaymentController extends Controller
 
     /**
      * Извлекает telegram_id из order_id
-     * Формат order_id: pay_{telegram_id}_{timestamp}
+     * Формат order_id: pay_{telegram_id}_{unique_id}_{random}
      */
     private function extractTelegramIdFromOrderId(string $orderId): ?int
     {
-        // Проверяем формат order_id: pay_{telegram_id}_{timestamp}
-        if (preg_match('/^pay_(\d+)_\d+$/', $orderId, $matches)) {
+        // Проверяем формат order_id: pay_{telegram_id}_{unique_id}_{random}
+        if (preg_match('/^pay_(\d+)_[a-f0-9]+_\d+$/', $orderId, $matches)) {
             return (int) $matches[1];
         }
 

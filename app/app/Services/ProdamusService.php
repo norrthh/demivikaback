@@ -166,8 +166,13 @@ class ProdamusService
      */
     public function createOneTimePayment(int $telegramId): array
     {
+        // Используем uniqid() + случайное число для максимальной уникальности
+        $uniqueId = uniqid('', true); // с микросекундами
+        $random = mt_rand(10000, 99999); // случайное 5-значное число
+        $orderId = 'pay_' . $telegramId . '_' . str_replace('.', '', $uniqueId) . '_' . $random;
+        
         return [
-            'order_id' => 'pay_' . $telegramId . '_' . time(),
+            'order_id' => $orderId,
             'customer_phone' => '1241241212',
             'products' => [
                 [
