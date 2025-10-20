@@ -95,6 +95,8 @@ class PersonalRecipeService
         // Берем только первые 7 записей (неделя)
         $recipes = $recipes->take(7);
 
+        \Log::info("Returning recipes count: " . $recipes->count());
+
         return $this->formatRecipes($recipes);
     }
 
@@ -126,9 +128,13 @@ class PersonalRecipeService
         // Определяем дату начала недели (сегодня)
         $weekStartDate = Carbon::today();
 
-        foreach ($supabaseRecipes as $recipe) {
-            $dayNumber = $recipe['day'] ?? 1;
+        // Группируем рецепты по дням
+        $recipesByDay = $supabaseRecipes->groupBy('day');
+        
+        foreach ($recipesByDay as $dayNumber => $dayRecipes) {
             $date = $weekStartDate->copy()->addDays($dayNumber - 1);
+
+            \Log::info("Saving recipes for day: $dayNumber, date: $date, telegram_id: $telegramId, count: " . $dayRecipes->count());
 
             // Используем updateOrCreate для избежания дубликатов
             UserRecipes::updateOrCreate(
@@ -138,7 +144,7 @@ class PersonalRecipeService
                     'date' => $date,
                 ],
                 [
-                    'recipe_data' => $recipe,
+                    'recipe_data' => $dayRecipes->toArray(),
                 ]
             );
         }
@@ -169,20 +175,36 @@ class PersonalRecipeService
         $result = [];
 
         foreach ($daysMap as $dayNum => $dayName) {
-            $dayRecipes = $recipes->where('recipe_data.day', $dayNum);
-
-            // группировка по meal_types
-            $grouped = $dayRecipes->groupBy(function ($item) {
-                $mealTypes = $item['recipe_data']['meal_types'] ?? [];
-                return $mealTypes[0] ?? 'other';
+            $targetDate = Carbon::today()->addDays($dayNum - 1);
+            $dayRecipes = $recipes->filter(function($recipe) use ($targetDate) {
+                return Carbon::parse($recipe['date'])->format('Y-m-d') === $targetDate->format('Y-m-d');
             });
 
             $result[$dayName] = [];
 
             foreach ($mealMap as $mealKey => $mealName) {
-                $mealRecipes = $grouped->get($mealKey, collect())->map(function ($item) {
-                    return $item['recipe_data'];
-                })->values()->toArray();
+                $mealRecipes = [];
+                
+                // Проходим по всем рецептам дня и группируем по типам приемов пищи
+                foreach ($dayRecipes as $recipeRecord) {
+                    $recipeData = $recipeRecord['recipe_data'];
+                    
+                    // Если recipe_data - это массив рецептов
+                    if (is_array($recipeData) && isset($recipeData[0])) {
+                        foreach ($recipeData as $recipe) {
+                            $mealTypes = $recipe['meal_types'] ?? [];
+                            if (in_array($mealKey, $mealTypes)) {
+                                $mealRecipes[] = $recipe;
+                            }
+                        }
+                    } else {
+                        // Если recipe_data - это один рецепт (старый формат)
+                        $mealTypes = $recipeData['meal_types'] ?? [];
+                        if (in_array($mealKey, $mealTypes)) {
+                            $mealRecipes[] = $recipeData;
+                        }
+                    }
+                }
 
                 $result[$dayName][$mealName] = $mealRecipes;
             }
