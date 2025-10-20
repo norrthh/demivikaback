@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\UserRegistration;
 use App\Services\ProdamusService;
-use App\Services\DemivikaService;
+use App\Services\SupabaseService;
 use App\Services\Hmac;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,12 +15,12 @@ use Illuminate\Support\Facades\Log;
 class PaymentController extends Controller
 {
     private ProdamusService $prodamusService;
-    private DemivikaService $demivikaService;
+    private SupabaseService $supabaseService;
 
-    public function __construct(ProdamusService $prodamusService, DemivikaService $demivikaService)
+    public function __construct(ProdamusService $prodamusService, SupabaseService $supabaseService)
     {
         $this->prodamusService = $prodamusService;
-        $this->demivikaService = $demivikaService;
+        $this->supabaseService = $supabaseService;
     }
 
     /**
@@ -105,7 +105,7 @@ class PaymentController extends Controller
     }
 
     /**
-     * Получает статус подписки пользователя
+     * Получает статус подписки пользователя из Supabase
      */
     public function getSubscriptionStatus(Request $request): JsonResponse
     {
@@ -115,21 +115,47 @@ class PaymentController extends Controller
 
         $telegramId = $request->get('telegram_id');
 
-        $user = UserRegistration::where('telegram_id', $telegramId)->first();
+        try {
+            // Получаем данные пользователя из Supabase
+            $userData = $this->supabaseService->select('tg_users', [
+                'telegram_id' => "eq.{$telegramId}"
+            ]);
 
-        if (!$user) {
+            if (empty($userData)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Пользователь не найден'
+                ], 404);
+            }
+
+            $user = $userData[0];
+            $hasActiveSubscription = false;
+            $subscriptionExpiresAt = null;
+
+            // Проверяем активность подписки
+            if (isset($user['access_until']) && $user['access_until']) {
+                $subscriptionExpiresAt = $user['access_until'];
+                $hasActiveSubscription = now()->format('Y-m-d') <= $user['access_until'];
+            }
+
+            return response()->json([
+                'success' => true,
+                'subscription_active' => $hasActiveSubscription,
+                'subscription_expires_at' => $subscriptionExpiresAt,
+                'user_id' => $user['id'] ?? null
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting subscription status from Supabase', [
+                'telegram_id' => $telegramId,
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Пользователь не найден'
-            ], 404);
+                'message' => 'Ошибка получения статуса подписки'
+            ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'subscription_active' => $user->hasActiveSubscription(),
-            'subscription_expires_at' => $user->subscription_expires_at,
-            'user_id' => $user->id
-        ]);
     }
 
     /**
@@ -174,7 +200,7 @@ class PaymentController extends Controller
                 $payment = Payment::where('order_id', $orderNum)->first();
                 Log::info('Searching payment by order_num (our order_id)', ['order_num' => $orderNum, 'found' => $payment ? 'yes' : 'no']);
             }
-            
+
             if (!$payment && $orderId) {
                 // order_id в webhook'е - это внутренний ID Prodamus, ищем по order_num в БД
                 $payment = Payment::where('order_num', $orderId)->first();
@@ -219,17 +245,17 @@ class PaymentController extends Controller
 
             // Обновляем статус платежа и сохраняем order_num если его еще нет
             $updateData = ['status' => $status, 'prodamus_data' => $data];
-            
+
             // Если платеж оплачен, устанавливаем дату оплаты
             if ($status === 'paid') {
                 $updateData['paid_at'] = now();
             }
-            
+
             // Если у нас есть order_id (внутренний ID Prodamus) и order_num еще не сохранен
             if ($orderId && !$payment->order_num) {
                 $updateData['order_num'] = $orderId;
             }
-            
+
             $payment->update($updateData);
 
             Log::info('Payment status updated', [
@@ -258,33 +284,41 @@ class PaymentController extends Controller
     }
 
     /**
-     * Активирует подписку пользователя в основной системе DemiVika
+     * Активирует подписку пользователя через Supabase
      */
     private function activateSubscription(int $telegramId, string $orderId): void
     {
         try {
-            Log::info('Activating subscription in main system', [
+            Log::info('Activating subscription via Supabase', [
                 'telegram_id' => $telegramId,
                 'order_id' => $orderId
             ]);
 
-            // Предоставляем доступ в основной системе DemiVika на 3 week
-            $success = $this->demivikaService->grantAccess($telegramId);
+            // Вычисляем дату окончания доступа (1 месяц)
+            $accessUntil = now()->addDays(22)->format('Y-m-d');
 
-            if ($success) {
-                Log::info('Subscription activated successfully in main system', [
+            // Обновляем access_until в Supabase для пользователя
+            $result = $this->supabaseService->update('tg_users', [
+                'access_until' => $accessUntil,
+                'updated_at' => now()->toISOString()
+            ], 'telegram_id', $telegramId);
+
+            if ($result && !isset($result['error'])) {
+                Log::info('Subscription activated successfully via Supabase', [
                     'telegram_id' => $telegramId,
-                    'order_id' => $orderId
+                    'order_id' => $orderId,
+                    'access_until' => $accessUntil
                 ]);
             } else {
-                Log::error('Failed to activate subscription in main system', [
+                Log::error('Failed to activate subscription via Supabase', [
                     'telegram_id' => $telegramId,
-                    'order_id' => $orderId
+                    'order_id' => $orderId,
+                    'result' => $result
                 ]);
             }
 
         } catch (\Exception $e) {
-            Log::error('Exception while activating subscription', [
+            Log::error('Exception while activating subscription via Supabase', [
                 'telegram_id' => $telegramId,
                 'order_id' => $orderId,
                 'error' => $e->getMessage()
