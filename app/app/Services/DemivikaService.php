@@ -23,7 +23,7 @@ class DemivikaService
     {
         try {
             // Вычисляем дату окончания доступа
-            $accessUntil = now()->addWeeks(3)->format('Y-m-d');
+            $accessUntil = now()->addDays(22)->format('Y-m-d');
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
