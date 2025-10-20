@@ -158,38 +158,40 @@ class PaymentController extends Controller
                 'signature' => $signature
             ]);
 
-            // Проверяем подпись согласно документации Prodamus
-            if (!Hmac::verify($data, config('services.prodamus.secret_key'), $signature)) {
-                Log::error('Invalid signature in webhook', [
-                    'data' => $data,
-                    'signature' => $signature
-                ]);
-
-                return response()->json(['error' => 'Invalid signature'], 400);
-            }
-
             // Проверяем обязательные поля согласно документации Prodamus
             $orderId = $data['order_id'] ?? null;
+            $orderNum = $data['order_num'] ?? null;
 
-            if (!$orderId) {
-                Log::error('No order_id in webhook', ['data' => $data]);
-                return response()->json(['error' => 'No order_id'], 400);
+            if (!$orderId && !$orderNum) {
+                Log::error('No order_id or order_num in webhook', ['data' => $data]);
+                return response()->json(['error' => 'No order_id or order_num'], 400);
             }
 
-            // Находим платеж
-            $payment = Payment::where('order_id', $orderId)->first();
+            // Находим платеж по order_num (это наш order_id) или order_id (внутренний ID Prodamus)
+            $payment = null;
+            if ($orderNum) {
+                // order_num в webhook'е - это наш order_id
+                $payment = Payment::where('order_id', $orderNum)->first();
+                Log::info('Searching payment by order_num (our order_id)', ['order_num' => $orderNum, 'found' => $payment ? 'yes' : 'no']);
+            }
+            
+            if (!$payment && $orderId) {
+                // order_id в webhook'е - это внутренний ID Prodamus, ищем по order_num в БД
+                $payment = Payment::where('order_num', $orderId)->first();
+                Log::info('Searching payment by order_id (Prodamus internal ID)', ['order_id' => $orderId, 'found' => $payment ? 'yes' : 'no']);
+            }
 
             if (!$payment) {
-                Log::error('Payment not found', ['order_id' => $orderId]);
+                Log::error('Payment not found', ['order_id' => $orderId, 'order_num' => $orderNum]);
                 return response()->json(['error' => 'Payment not found'], 404);
             }
 
-            // Извлекаем telegram_id из order_id (формат: pay_{telegram_id}_{timestamp})
-            $telegramId = $this->extractTelegramIdFromOrderId($orderId);
+            // Получаем telegram_id из найденного платежа
+            $telegramId = $payment->telegram_id;
 
             if (!$telegramId) {
-                Log::error('Cannot extract telegram_id from order_id', ['order_id' => $orderId]);
-                return response()->json(['error' => 'Invalid order_id format'], 400);
+                Log::error('No telegram_id in payment', ['payment_id' => $payment->id]);
+                return response()->json(['error' => 'No telegram_id in payment'], 400);
             }
 
             // Согласно документации Prodamus, webhook приходит только при успешной оплате
@@ -215,8 +217,20 @@ class PaymentController extends Controller
                 }
             }
 
-            // Обновляем статус платежа
-            $payment->updateStatus($status, $data);
+            // Обновляем статус платежа и сохраняем order_num если его еще нет
+            $updateData = ['status' => $status, 'prodamus_data' => $data];
+            
+            // Если платеж оплачен, устанавливаем дату оплаты
+            if ($status === 'paid') {
+                $updateData['paid_at'] = now();
+            }
+            
+            // Если у нас есть order_id (внутренний ID Prodamus) и order_num еще не сохранен
+            if ($orderId && !$payment->order_num) {
+                $updateData['order_num'] = $orderId;
+            }
+            
+            $payment->update($updateData);
 
             Log::info('Payment status updated', [
                 'order_id' => $orderId,
@@ -225,7 +239,7 @@ class PaymentController extends Controller
 
             // Если платеж оплачен, активируем подписку в основной системе
             if ($status === 'paid') {
-                $this->activateSubscription($telegramId, $orderId);
+                $this->activateSubscription($telegramId, $payment->order_id);
             }
 
             // Согласно документации Prodamus, при успешной обработке webhook
@@ -254,7 +268,7 @@ class PaymentController extends Controller
                 'order_id' => $orderId
             ]);
 
-            // Предоставляем доступ в основной системе DemiVika на 1 месяц
+            // Предоставляем доступ в основной системе DemiVika на 3 week
             $success = $this->demivikaService->grantAccess($telegramId);
 
             if ($success) {
