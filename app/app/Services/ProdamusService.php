@@ -13,7 +13,7 @@ class ProdamusService
     private string $payformUrl;
 
     // Константы для клуба "КОД ЖЕНЩИНЫ"
-    public const SUBSCRIPTION_AMOUNT = 2990.00;
+    public const SUBSCRIPTION_AMOUNT = 3990.00;
     public const SUBSCRIPTION_DESCRIPTION = 'Доступ к клубу на 1 месяц КОД ЖЕНЩИНЫ';
 
     public function __construct()
