@@ -39,4 +39,16 @@ return [
         'url' => env('SUPABASE_URL'),
         'key' => env('SUPABASE_KEY'),
     ],
+
+    'prodamus' => [
+        'base_url' => env('PRODAMUS_BASE_URL', 'https://demivika.payform.ru/'),
+        'payform_url' => env('PRODAMUS_PAYFORM_URL', 'https://demivika.payform.ru/'),
+        'secret_key' => env('PRODAMUS_SECRET_KEY', '61f2852777240e53c6dfe9afa2fc66719cf9c1fd7e8beec83f15f50f17798b67'),
+        'sys_code' => env('PRODAMUS_SYS_CODE', 'tma'),
+    ],
+
+    'demivika' => [
+        'base_url' => 'https://web.vikademi.ru/api/admin/grant-access',
+        'api_key' => 'demivika_admin_secret_key_2025',
+    ],
 ];
