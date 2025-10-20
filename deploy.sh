@@ -49,8 +49,12 @@ if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
         exit 1
     fi
     
-    # Получаем сертификат
-    sudo certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
+    # Создаем директорию для webroot если её нет
+    sudo mkdir -p /var/www/html/public/.well-known/acme-challenge
+    sudo chown -R www-data:www-data /var/www/html/public/.well-known
+    
+    # Получаем сертификат используя webroot метод
+    sudo certbot certonly --webroot -w /var/www/html/public -d $DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
     
     if [ $? -ne 0 ]; then
         echo "❌ Не удалось получить SSL сертификат. Проверьте настройки домена."
