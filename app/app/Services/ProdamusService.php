@@ -13,7 +13,7 @@ class ProdamusService
     private string $payformUrl;
 
     // Константы для клуба "КОД ЖЕНЩИНЫ"
-    public const SUBSCRIPTION_AMOUNT = 50.00;
+    public const SUBSCRIPTION_AMOUNT = 2990.00;
     public const SUBSCRIPTION_DESCRIPTION = 'Доступ к клубу на 1 месяц КОД ЖЕНЩИНЫ';
 
     public function __construct()
@@ -170,7 +170,7 @@ class ProdamusService
         $uniqueId = uniqid('', true); // с микросекундами
         $random = mt_rand(10000, 99999); // случайное 5-значное число
         $orderId = 'pay_' . $telegramId . '_' . str_replace('.', '', $uniqueId) . '_' . $random;
-        
+
         return [
             'order_id' => $orderId,
             'customer_phone' => '1241241212',
