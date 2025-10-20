@@ -11,14 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Временно удаляем уникальный индекс
-        Schema::table('user_recipes', function (Blueprint $table) {
-            try {
-                $table->dropUnique('user_recipes_telegram_id_recipe_id_week_start_unique');
-            } catch (Exception $e) {
-                echo "Индекс уже удален или не существует\n";
-            }
-        });
+        // Индекс уже был удален в предыдущих миграциях, ничего не делаем
+        // Эта миграция больше не нужна
     }
 
     /**

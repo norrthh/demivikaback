@@ -12,9 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_recipes', function (Blueprint $table) {
-            // Удаляем старый уникальный индекс
-            $table->dropUnique('user_recipes_telegram_id_recipe_id_week_start_unique');
-            
             // Создаем новый уникальный индекс для комбинации telegram_id, week, date
             $table->unique(['telegram_id', 'week', 'date'], 'user_recipes_unique_constraint');
         });

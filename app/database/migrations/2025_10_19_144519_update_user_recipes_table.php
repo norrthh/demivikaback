@@ -12,7 +12,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_recipes', function (Blueprint $table) {
-            $table->dropColumn(['recipe_id', 'week_start']);
+            // Удаляем уникальный индекс перед удалением колонок
+            $table->dropUnique(['telegram_id', 'recipe_id', 'week_start']);
+        });
+        
+        Schema::table('user_recipes', function (Blueprint $table) {
+            // Проверяем существование колонок перед удалением
+            if (Schema::hasColumn('user_recipes', 'recipe_id')) {
+                $table->dropColumn('recipe_id');
+            }
+            if (Schema::hasColumn('user_recipes', 'week_start')) {
+                $table->dropColumn('week_start');
+            }
             $table->integer('week')->comment('Номер недели');
             $table->date('date')->comment('Дата рецепта');
             $table->json('recipe_data')->comment('Данные рецепта');

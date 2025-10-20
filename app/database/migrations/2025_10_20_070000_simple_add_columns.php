@@ -12,27 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Просто добавляем недостающие колонки
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        
-        try {
-            if (!Schema::hasColumn('user_recipes', 'week')) {
-                DB::statement("ALTER TABLE user_recipes ADD COLUMN week INT NULL COMMENT 'Номер недели'");
-                echo "Добавлена колонка week\n";
-            }
-            if (!Schema::hasColumn('user_recipes', 'date')) {
-                DB::statement("ALTER TABLE user_recipes ADD COLUMN date DATE NULL COMMENT 'Дата рецепта'");
-                echo "Добавлена колонка date\n";
-            }
-            if (!Schema::hasColumn('user_recipes', 'recipe_data')) {
-                DB::statement("ALTER TABLE user_recipes ADD COLUMN recipe_data JSON NULL COMMENT 'Данные рецепта'");
-                echo "Добавлена колонка recipe_data\n";
-            }
-        } catch (Exception $e) {
-            echo "Ошибка при добавлении колонок: " . $e->getMessage() . "\n";
-        }
-        
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Колонки уже добавлены в предыдущих миграциях, ничего не делаем
+        // Эта миграция больше не нужна
     }
 
     /**

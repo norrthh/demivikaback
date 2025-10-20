@@ -243,6 +243,22 @@ class PaymentController extends Controller
                 }
             }
 
+            // Проверяем сумму платежа для предотвращения подмены
+            $webhookAmount = isset($data['sum']) ? (float) $data['sum'] : null;
+            $dbAmount = (float) $payment->amount;
+
+            if ($webhookAmount && $webhookAmount !== $dbAmount) {
+                Log::error('Payment amount mismatch', [
+                    'order_id' => $orderId,
+                    'order_num' => $orderNum,
+                    'webhook_amount' => $webhookAmount,
+                    'db_amount' => $dbAmount,
+                    'payment_id' => $payment->id
+                ]);
+
+                return response()->json(['error' => 'Payment amount mismatch'], 400);
+            }
+
             // Обновляем статус платежа и сохраняем order_num если его еще нет
             $updateData = ['status' => $status, 'prodamus_data' => $data];
 
@@ -297,11 +313,24 @@ class PaymentController extends Controller
             // Вычисляем дату окончания доступа (1 месяц)
             $accessUntil = now()->addDays(22)->format('Y-m-d');
 
-            // Обновляем access_until в Supabase для пользователя
-            $result = $this->supabaseService->update('tg_users', [
-                'access_until' => $accessUntil,
-                'updated_at' => now()->toISOString()
-            ], 'telegram_id', $telegramId);
+            // Обновляем access_until в Supabase для ВСЕХ записей пользователя
+            // Сначала получаем все записи пользователя
+            $userRecords = $this->supabaseService->select('tg_users', [
+                'telegram_id' => "eq.{$telegramId}"
+            ]);
+
+            // Обновляем каждую запись отдельно
+            $updatedCount = 0;
+            foreach ($userRecords as $record) {
+                $result = $this->supabaseService->update('tg_users', [
+                    'access_until' => $accessUntil,
+                    'updated_at' => now()->toISOString()
+                ], 'id', $record['id']);
+                
+                if ($result && !isset($result['error'])) {
+                    $updatedCount++;
+                }
+            }
 
             if ($result && !isset($result['error'])) {
                 Log::info('Subscription activated successfully via Supabase', [

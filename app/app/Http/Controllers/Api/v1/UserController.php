@@ -156,7 +156,7 @@ class UserController extends Controller
         ]);
 
         $telegramId = $request->get('telegram_id');
-        
+
         $user = UserRegistration::where('telegram_id', $telegramId)->first();
 
         if (!$user) {

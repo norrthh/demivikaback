@@ -26,10 +26,19 @@ class Payment extends Model
     ];
 
     /**
-     * Создает новый платеж
+     * Создает новый платеж или возвращает существующий
      */
     public static function createPayment(array $data): self
     {
+        // Проверяем, существует ли уже платеж с таким order_id
+        $existingPayment = self::query()->where('order_id', $data['order_id'])->first();
+
+        if ($existingPayment) {
+            // Если платеж уже существует, возвращаем его
+            return $existingPayment;
+        }
+
+        // Создаем новый платеж
         return self::create($data);
     }
 
