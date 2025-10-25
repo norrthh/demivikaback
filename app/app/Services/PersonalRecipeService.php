@@ -30,7 +30,8 @@ class PersonalRecipeService
         }
 
         // Получаем неделю из цикла для Supabase
-        $previewWeek = (new PersonalGroceryServices($this->supabase))->getWeek + $week;
+        $groceryService = new PersonalGroceryServices($this->supabase);
+        $previewWeek = $groceryService->getWeek + $week;
         $previewWeek = $previewWeek > 3 ? (($previewWeek - 1) % 3) + 1 : $previewWeek;
 
         // Получаем данные из Supabase без сохранения в БД
@@ -109,7 +110,8 @@ class PersonalRecipeService
         UserRecipes::where('telegram_id', $telegramId)->delete();
 
         // Получаем текущую неделю из цикла для Supabase
-        $currentWeek = (new PersonalGroceryServices($this->supabase))->getWeek;
+        $groceryService = new PersonalGroceryServices($this->supabase);
+        $currentWeek = $groceryService->getWeek;
         $currentWeek = $currentWeek > 3 ? (($currentWeek - 1) % 3) + 1 : $currentWeek;
 
         // Получаем данные из Supabase
@@ -175,32 +177,33 @@ class PersonalRecipeService
         $result = [];
 
         foreach ($daysMap as $dayNum => $dayName) {
-            $targetDate = Carbon::today()->addDays($dayNum - 1);
-            $dayRecipes = $recipes->filter(function($recipe) use ($targetDate) {
-                return Carbon::parse($recipe['date'])->format('Y-m-d') === $targetDate->format('Y-m-d');
-            });
-
             $result[$dayName] = [];
 
             foreach ($mealMap as $mealKey => $mealName) {
                 $mealRecipes = [];
                 
-                // Проходим по всем рецептам дня и группируем по типам приемов пищи
-                foreach ($dayRecipes as $recipeRecord) {
+                // Проходим по всем рецептам и группируем по дням и типам приемов пищи
+                foreach ($recipes as $recipeRecord) {
                     $recipeData = $recipeRecord['recipe_data'];
                     
                     // Если recipe_data - это массив рецептов
                     if (is_array($recipeData) && isset($recipeData[0])) {
                         foreach ($recipeData as $recipe) {
+                            $recipeDay = $recipe['day'] ?? null;
                             $mealTypes = $recipe['meal_types'] ?? [];
-                            if (in_array($mealKey, $mealTypes)) {
+                            
+                            // Проверяем, что рецепт относится к текущему дню и типу приема пищи
+                            if ($recipeDay === $dayNum && in_array($mealKey, $mealTypes)) {
                                 $mealRecipes[] = $recipe;
                             }
                         }
                     } else {
                         // Если recipe_data - это один рецепт (старый формат)
+                        $recipeDay = $recipeData['day'] ?? null;
                         $mealTypes = $recipeData['meal_types'] ?? [];
-                        if (in_array($mealKey, $mealTypes)) {
+                        
+                        // Проверяем, что рецепт относится к текущему дню и типу приема пищи
+                        if ($recipeDay === $dayNum && in_array($mealKey, $mealTypes)) {
                             $mealRecipes[] = $recipeData;
                         }
                     }
